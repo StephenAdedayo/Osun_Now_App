@@ -1,123 +1,118 @@
-const mongoose = require("mongoose")
+const mongoose = require("mongoose");
 
-const userSchema = mongoose.Schema({
-
-     
-
-    firstName : {
-        type : String,
-        default : ""
+const userSchema = mongoose.Schema(
+  {
+    firstName: {
+      type: String,
+      default: "",
     },
 
-    middleName : {
-        type : String,
-        default : ""
+    middleName: {
+      type: String,
+      default: "",
     },
 
-    lastName : {
-        type : String,
-        default : ""
+    lastName: {
+      type: String,
+      default: "",
     },
 
-    email : {
-        type : String,
-        unique : true,
-        default : null
+    email: {
+      type: String,
+      unique: true,
+      default: null,
     },
 
-    password : {
-        type : String,
-        required : true
+    password: {
+      type: String,
+      required: true,
     },
 
-    dateOfBirth : {
-        type : Date,
-        default : ""
+    dateOfBirth: {
+      type: Date,
+      default: "",
     },
 
-    occupation : {
-        type : String,
-        default : ""
+    occupation: {
+      type: String,
+      default: "",
     },
 
-    gender : {
-        type : String,
-        default : ""
+    gender: {
+      type: String,
+      default: "",
     },
 
-    nin : {
-        type : Number,
-        default : ""
+    nin: {
+      type: Number,
+      default: "",
     },
 
-    phone : {
-        type : Number,
-        required : true,
-        unique : true
+    phone: {
+      type: Number,
+      required: true,
+      unique: true,
     },
 
-    address : {
-        type : String,
-        default : ""
+    address: {
+      type: String,
+      default: "",
     },
 
-    city : {
-        type : String,
-        default : ""
+    city: {
+      type: String,
+      default: "",
     },
 
-    lga : {
-        type : String,
-        default : ""
-    },
-    
-    image : {
-        type : String,
-        default : ""
+    lga: {
+      type: String,
+      default: "",
     },
 
-    isUserVerified : {
-       type : Boolean,
-       default : false
+    image: {
+      type: String,
+      default: "",
     },
 
-    verifyOtp : {
-        type : String,
-        default : ""
+    isUserVerified: {
+      type: Boolean,
+      default: false,
     },
 
-
-    verifyOtpExpires : {
-        type : Number,
-        default : 0
+    verifyOtp: {
+      type: String,
+      default: "",
     },
 
-    resetPasswordOtp : {
-        type : String,
-        default : ""
+    verifyOtpExpires: {
+      type: Number,
+      default: 0,
     },
 
-    resetPasswordOtpExpires : {
-        type : Number,
-        default : 0
+    resetPasswordOtp: {
+      type: String,
+      default: "",
     },
 
-    isProfileComplete : {
-        type : Boolean,
-        default : false
+    resetPasswordOtpExpires: {
+      type: Number,
+      default: 0,
     },
 
-    authProvider : {
-        type : String,
-        enum : ["Local", "Google", "Apple", "Yahoo"],
-        default : "Local"
-    }
+    isProfileComplete: {
+      type: Boolean,
+      default: false,
+    },
 
+    authProvider: {
+      type: String,
+      enum: ["Local", "Google", "Apple", "Yahoo"],
+      default: "Local",
+    },
+  },
+  { timestamps: true, minimize: false },
+);
 
+const User = mongoose.model("User", userSchema);
 
-}, {timestamps : true, minimize : false})
-
-
-const User = mongoose.model("User", userSchema)
-
-module.exports = User
+module.exports = User;

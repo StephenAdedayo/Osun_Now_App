@@ -1,238 +1,283 @@
-const axios = require("axios")
-const { TWILIO_PHONE, TERMII_SENDER, TERMII_API_KEY } = require("../config/keys")
-const { User } = require("../models")
-const comparePassword = require("../utils/comparePassword")
-const generateCode = require("../utils/generateCode")
-const generateToken = require("../utils/generateToken")
-const hashPassword = require("../utils/hashPassword")
-const twilioClient = require("../utils/twilio")
+const axios = require("axios");
+const {
+  TWILIO_PHONE,
+  TERMII_SENDER,
+  TERMII_API_KEY,
+  GOOGLE_WEB_CLIENT_ID,
+} = require("../config/keys");
+const { User } = require("../models");
+const comparePassword = require("../utils/comparePassword");
+const generateCode = require("../utils/generateCode");
+const generateToken = require("../utils/generateToken");
+const hashPassword = require("../utils/hashPassword");
+const twilioClient = require("../utils/twilio");
+const { OAuth2Client } = require("google-auth-library");
+const client = new OAuth2Client(GOOGLE_WEB_CLIENT_ID);
 
 const registerUser = async (req, res, next) => {
+  try {
+    const { phone, password } = req.body;
 
-    try {
-        
-        const {phone, password} = req.body
+    const phoneExists = await User.findOne({ phone });
 
-       
-        const phoneExists = await User.findOne({phone})
-
-        if(phoneExists){
-            res.code = 400
-            throw new Error("User already exists")
-        }
-
-        const hashedPassword = await hashPassword(password)
-
-        const userDetails = {
-            phone  : +phone,
-            password : hashedPassword
-        }
-
-        const newUser = new User(userDetails)
-        await newUser.save()
-
-
-        res.status(201).json({success : true, message : "User registration successful", newUser})
-    } catch (error) {
-        next(error)
+    if (phoneExists) {
+      res.code = 400;
+      throw new Error("User already exists");
     }
 
-}
+    const hashedPassword = await hashPassword(password);
 
+    const userDetails = {
+      phone: +phone,
+      password: hashedPassword,
+    };
+
+    const newUser = new User(userDetails);
+    await newUser.save();
+
+    res
+      .status(201)
+      .json({
+        success: true,
+        message: "User registration successful",
+        newUser,
+      });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const loginUser = async (req, res, next) => {
+  try {
+    const { phone, password } = req.body;
 
-    try {
+    const user = await User.findOne({ phone });
 
-        const {phone, password} = req.body
+    if (!user) {
+      res.code = 400;
+      throw new Error("User does not exists, please register");
+    }
 
-        const user = await User.findOne({phone})
+    const isMatch = await comparePassword(password, user.password);
 
-        if(!user){
-            res.code = 400
-            throw new Error("User does not exists, please register")
-        }
+    if (!isMatch) {
+      res.code = 400;
+      throw new Error("Password does not match");
+    }
 
-        const isMatch = await comparePassword(password, user.password)
+    const token = generateToken(user);
 
-        if(!isMatch){
-            res.code = 400
-            throw new Error("Password does not match")
-        }
+    if (user.isUserVerified) {
+      return res
+        .status(200)
+        .json({ success: true, message: "Login successful", token });
+    }
 
-        const token = generateToken(user)
+    const otp = generateCode(4);
 
-        if(user.isUserVerified){
-           return res.status(200).json({success : true, message : "Login successful", token})
-        }
+    user.verifyOtp = otp;
+    user.verifyOtpExpires = Date.now() + 24 * 60 * 60 * 1000;
 
-       const otp = generateCode(4)
-        
-       user.verifyOtp = otp
-       user.verifyOtpExpires = Date.now() + 24 * 60 * 60 * 1000
+    await user.save();
 
-       await user.save()
-
-      await twilioClient.messages.create({
+    await twilioClient.messages.create({
       body: `Your OTP is ${otp}. Expires in 5 minutes.`,
       from: TWILIO_PHONE,
       to: `+234${user.phone}`,
-  });  
+    });
 
-//   console.log(`+234${user.phone}`);
-  
-  
-//   await axios.post("https://v3.api.termii.com/api/sms/send", {
-//       to: `+234${user.phone}`,
-//       from: TERMII_SENDER,
-//       sms: `Your OTP is ${otp}. Expires in 5 minutes.`,
-//       type: "plain",
-//       channel: "generic",
-//       api_key: TERMII_API_KEY,
-//     });
+    //   console.log(`+234${user.phone}`);
 
-  res.status(200).json({success : true, message : "Enter otp sent to verify your account", otp})
+    //   await axios.post("https://v3.api.termii.com/api/sms/send", {
+    //       to: `+234${user.phone}`,
+    //       from: TERMII_SENDER,
+    //       sms: `Your OTP is ${otp}. Expires in 5 minutes.`,
+    //       type: "plain",
+    //       channel: "generic",
+    //       api_key: TERMII_API_KEY,
+    //     });
 
-    } catch (error) {
-        next(error)
-    }
-
-}
-
+    res
+      .status(200)
+      .json({
+        success: true,
+        message: "Enter otp sent to verify your account",
+        otp,
+      });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const authenticateUser = async (req, res, next) => {
+  try {
+    const { phone, otp } = req.body;
 
+    const user = await User.findOne({ phone });
 
-    try {
-        const {phone, otp} = req.body
-
-        const user = await User.findOne({phone})
-
-        if(!user){
-            res.code = 400
-            throw new Error("User not found")
-        }
-
-        if(user.verifyOtp === "" || user.verifyOtp !== otp){
-            res.code = 400
-            throw new Error("Invalid otp")
-        }
-
-        if(user.verifyOtpExpires < Date.now()){
-            res.code = 400
-            throw new Error("Otp already expired")
-        }
-
-        user.isUserVerified = true
-        user.verifyOtp = null
-        user.verifyOtpExpires = 0
-
-        await user.save()
-
-        const token = generateToken(user)
-
-        res.status(200).json({success: true, message : "User verified successfully", token})
-
-    } catch (error) {
-        next(error)
+    if (!user) {
+      res.code = 400;
+      throw new Error("User not found");
     }
 
-}
+    if (user.verifyOtp === "" || user.verifyOtp !== otp) {
+      res.code = 400;
+      throw new Error("Invalid otp");
+    }
+
+    if (user.verifyOtpExpires < Date.now()) {
+      res.code = 400;
+      throw new Error("Otp already expired");
+    }
+
+    user.isUserVerified = true;
+    user.verifyOtp = null;
+    user.verifyOtpExpires = 0;
+
+    await user.save();
+
+    const token = generateToken(user);
+
+    res
+      .status(200)
+      .json({ success: true, message: "User verified successfully", token });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const sendResetPasswordOtp = async (req, res, next) => {
+  try {
+    const { phone } = req.body;
 
-    try {
-        const {phone} = req.body
+    const user = await User.findOne({ phone });
 
-        const user = await User.findOne({phone})
+    if (!user) {
+      res.code = 400;
+      throw new Error("User not found");
+    }
 
-        if(!user){
-            res.code = 400
-            throw new Error("User not found")
-        }
+    const otp = generateCode(4);
 
+    user.resetPasswordOtp = otp;
+    user.resetPasswordOtpExpires = Date.now() + 24 * 60 * 60 * 1000;
 
-        const otp = generateCode(4)
+    await user.save();
 
-        user.resetPasswordOtp = otp
-        user.resetPasswordOtpExpires = Date.now() + 24 * 60 * 60 * 1000
-
-        await user.save()
-         
-      await twilioClient.messages.create({
+    await twilioClient.messages.create({
       body: `Your OTP is ${otp}. Expires in 5 minutes.`,
       from: TWILIO_PHONE,
       to: `+234${user.phone}`,
-     });  
+    });
 
-    res.status(200).json({success : true, otp, message : "Reset password otp sent successfuly"})
-
-    } catch (error) {
-        next(error)
-    }
-
-}
+    res
+      .status(200)
+      .json({
+        success: true,
+        otp,
+        message: "Reset password otp sent successfuly",
+      });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const verifyResetOtp = async (req, res, next) => {
+  try {
+    const { phone, otp } = req.body;
 
-    try {
-        const {phone, otp} = req.body
+    const user = await User.findOne({ phone });
 
-        const user = await User.findOne({phone})
-
-        if(!user){
-            res.code = 400
-            throw new Error("User not found")
-        }
-
-       if(user.resetPasswordOtp === "" || user.resetPasswordOtp !== otp){
-            res.code = 400
-            throw new Error("Invalid otp")
-        }
-
-        if(user.resetPasswordOtpExpires < Date.now()){
-            res.code = 400
-            throw new Error("Otp already expired")
-        }
-
-        user.resetPasswordOtp = null,
-        user.resetPasswordOtpExpires = 0  
-
-        await user.save()
-        
-        res.status(200).json({success : true, message : "Otp verification successful"})
-
-    } catch (error) {
-        next(error)
+    if (!user) {
+      res.code = 400;
+      throw new Error("User not found");
     }
 
-}
+    if (user.resetPasswordOtp === "" || user.resetPasswordOtp !== otp) {
+      res.code = 400;
+      throw new Error("Invalid otp");
+    }
 
+    if (user.resetPasswordOtpExpires < Date.now()) {
+      res.code = 400;
+      throw new Error("Otp already expired");
+    }
+
+    ((user.resetPasswordOtp = null), (user.resetPasswordOtpExpires = 0));
+
+    await user.save();
+
+    res
+      .status(200)
+      .json({ success: true, message: "Otp verification successful" });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const resetPasswordUser = async (req, res, next) => {
+  try {
+    const { phone, newPassword } = req.body;
 
-    try {
-        const {phone, newPassword} = req.body
+    const user = await User.findOne({ phone });
 
-        const user = await User.findOne({phone})
-
-        if(!user){
-            res.code = 400
-            throw new Error("User not found")
-        }
-
-        const hashedPassword = await hashPassword(newPassword)
-        user.password = hashedPassword,
-        
-        await user.save()
-
-        res.status(200).json({success : true, message : "Password reset successful"})
-    } catch (error) {
-        next(error)
+    if (!user) {
+      res.code = 400;
+      throw new Error("User not found");
     }
 
-}
+    const hashedPassword = await hashPassword(newPassword);
+    ((user.password = hashedPassword), await user.save());
 
+    res
+      .status(200)
+      .json({ success: true, message: "Password reset successful" });
+  } catch (error) {
+    next(error);
+  }
+};
 
+const googleAuth = async (req, res, next) => {
+  try {
+    const { idToken } = req.body;
 
-module.exports = {registerUser, loginUser, authenticateUser, sendResetPasswordOtp, verifyResetOtp, resetPasswordUser}
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: GOOGLE_WEB_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+
+    const { email, given_name, family_name, picture, sub: googleId } = payload;
+
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        email,
+        firstName: given_name,
+        lastName: family_name,
+        image: picture,
+        authProvider: "google",
+        isUserVerified: true,
+        googleId,
+      });
+    }
+
+    const token = generateToken(user);
+
+    res.status(200).json({ token, user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  registerUser,
+  loginUser,
+  authenticateUser,
+  sendResetPasswordOtp,
+  verifyResetOtp,
+  resetPasswordUser,
+  googleAuth,
+};

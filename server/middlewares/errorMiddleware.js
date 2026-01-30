@@ -1,9 +1,9 @@
 const errorMiddleware = async (err, req, res, next) => {
+  const code = res.code ? res.code : 500;
 
-    const code = res.code ? res.code : 500
+  res
+    .status(code)
+    .json({ code, success: false, message: err.message, stack: err.stack });
+};
 
-    res.status(code).json({code, success : false, message : err.message, stack: err.stack})
-
-}
-
-module.exports = errorMiddleware
+module.exports = errorMiddleware;
