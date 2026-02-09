@@ -1,5 +1,7 @@
 const { Service } = require("../models");
 
+
+// create a service on remita and allocate a particular serviceTypeId to it
 const addService = async (req, res, next) => {
   try {
     const {

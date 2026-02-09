@@ -28,7 +28,7 @@ const initializeBillPayment = async (req, res, next) => {
 
     // Setup Variables
     const merchantId = REMITA_MERCHANT_ID; // Your Demo Biller ID
-    const secretKey = REMITA_API_KEY;
+    const secretKey = REMITA_SECRET_KEY;
     const apiKey = REMITA_API_KEY;
 
     const orderId = `OSN-${String(Math.floor(Math.random() * 10000000000))}`; // Unique internal reference
@@ -38,7 +38,7 @@ const initializeBillPayment = async (req, res, next) => {
 
     // Generate the SHA-512 Security Hash
     const rawString =
-      merchantId + service.serviceTypeId + orderId + totalAmount + secretKey;
+      merchantId + service.serviceTypeId + orderId + totalAmount + apiKey;
     const apiHash = crypto.createHash("sha512").update(rawString).digest("hex");
 
     console.log(apiHash);
@@ -208,7 +208,7 @@ try {
 
             if (bill && bill.status === "PENDING") {
                 bill.status = "SUCCESS";
-                bill.paymentResponse = verifiedData; 
+                bill.paymentResponse = verifiedData; j
                 await bill.save();
 
                 console.log(`[Webhook] ✅ Confirmed: Order ${orderRef} (RRR: ${rrr}) is PAID.`);
